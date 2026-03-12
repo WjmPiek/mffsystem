@@ -1,0 +1,2 @@
+﻿-- Insert a superuser manually after hashing password in app
+-- Example only
