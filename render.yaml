@@ -36,4 +36,3 @@ databases:
   - name: martinsdirect-db
     plan: free
     databaseName: martinsdirect
-    user: postgres
