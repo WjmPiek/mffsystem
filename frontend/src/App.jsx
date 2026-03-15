@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import './assets/styles/globals.css'
 
+const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+
 const demoAccounts = {
-  superuser: { email: 'wjm@martinsdirect.com', password: 'Renette7', firstLogin: false, displayName: 'Wjm', title: 'System Administrator' },
-  franchisee: { email: 'franchisee@martinsdirect.com', password: 'demo123', firstLogin: true, displayName: 'Franchisee User', title: 'Franchise Owner' },
-  manager: { email: 'manager@martinsdirect.com', password: 'demo123', firstLogin: false, displayName: 'Manager User', title: 'Franchise Manager' },
-  agent: { email: 'agent@martinsdirect.com', password: 'demo123', firstLogin: false, displayName: 'Agent User', title: 'Sales Agent' }
+  superuser: { email: 'wjm@martinsdirect.com', firstLogin: false, displayName: 'Wjm', title: 'System Administrator' },
+  franchisee: { email: 'franchisee@martinsdirect.com', firstLogin: true, displayName: 'Franchisee User', title: 'Franchise Owner' },
+  manager: { email: 'manager@martinsdirect.com', firstLogin: false, displayName: 'Manager User', title: 'Franchise Manager' },
+  agent: { email: 'agent@martinsdirect.com', firstLogin: false, displayName: 'Agent User', title: 'Sales Agent' }
 }
 
 const navForRole = {
@@ -28,6 +30,11 @@ const navForRole = {
     main: ['Dashboard', 'Franchise', 'Payments'],
     franchise: ['Upload Bank Statement', 'Auto Match Payments', 'Unmatched Payments', 'Employees'],
     payments: ['Receipt Generation']
+  },
+  user: {
+    main: ['Dashboard', 'Franchise', 'Payments'],
+    franchise: ['Employees'],
+    payments: ['Receipt Generation']
   }
 }
 
@@ -35,7 +42,8 @@ const employeesAccess = {
   superuser: 'Can see all franchisees, managers, and agents across the system. View-focused oversight for all records.',
   franchisee: 'Can add, edit, and deactivate any record under their franchise.',
   manager: 'Can add and edit records under their franchise, but cannot deactivate them.',
-  agent: 'Can add records only under their franchise.'
+  agent: 'Can add records only under their franchise.',
+  user: 'Can view the dashboard and limited franchise records.'
 }
 
 function toTitleCase(value) {
@@ -45,6 +53,10 @@ function toTitleCase(value) {
     .filter(Boolean)
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
+}
+
+function getApiUrl(path) {
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path
 }
 
 function Logo({ small = false }) {
@@ -74,20 +86,32 @@ function LoginScreen({ onLogin }) {
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
+    setIsSubmitting(true)
+    setError('')
 
-    const normalizedEmail = email.trim().toLowerCase()
-    const adminAccount = demoAccounts.superuser
+    try {
+      const response = await fetch(getApiUrl('/api/auth/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      })
 
-    if (normalizedEmail === adminAccount.email.toLowerCase() && password === adminAccount.password) {
-      setError('')
-      onLogin('superuser', { rememberMe })
-      return
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Sign in failed. Please try again.')
+      }
+
+      onLogin(data.user, { rememberMe })
+    } catch (err) {
+      setError(err.message || 'Unable to sign in right now.')
+    } finally {
+      setIsSubmitting(false)
     }
-
-    setError('Incorrect email or password. Please use your Martinsdirect admin credentials.')
   }
 
   return (
@@ -120,7 +144,7 @@ function LoginScreen({ onLogin }) {
             </div>
             <div className="auth-feature-item">
               <strong>Trusted sign-in</strong>
-              <span>Designed for a polished first impression on desktop and laptop screens.</span>
+              <span>Now connected to the backend login API instead of a hardcoded browser-only check.</span>
             </div>
           </div>
         </section>
@@ -128,7 +152,7 @@ function LoginScreen({ onLogin }) {
         <section className="auth-form-panel">
           <div className="auth-form-header">
             <p className="auth-form-kicker">Administrator sign in</p>
-            <h2>Welcome back, Wjm</h2>
+            <h2>Welcome back</h2>
             <p>Use your Martinsdirect admin email and password to continue.</p>
           </div>
 
@@ -182,13 +206,15 @@ function LoginScreen({ onLogin }) {
 
             {error ? <div className="auth-error">{error}</div> : null}
 
-            <button type="submit" className="primary-auth-btn">Sign in to dashboard</button>
+            <button type="submit" className="primary-auth-btn" disabled={isSubmitting}>
+              {isSubmitting ? 'Signing in...' : 'Sign in to dashboard'}
+            </button>
           </form>
 
           <div className="auth-footer-note">
-            <strong>Admin account</strong>
+            <strong>Default admin seed</strong>
             <span>{demoAccounts.superuser.email}</span>
-            <small>Role: {demoAccounts.superuser.title}</small>
+            <small>Set ADMIN_EMAIL and ADMIN_PASSWORD on Render to change this.</small>
           </div>
         </section>
       </div>
@@ -234,50 +260,26 @@ function FirstTimeSetup({ onComplete }) {
               <label>Franchise Name</label>
               <input value={franchiseName} readOnly />
             </div>
-
             <div className="form-group">
               <label>T/A Name</label>
               <input value={taName} onChange={(e) => setTaName(e.target.value)} />
             </div>
-
             <div className="grid-two">
-              <div className="form-group">
-                <label>Pty / CK Number</label>
-                <input />
-              </div>
-              <div className="form-group">
-                <label>VAT Number</label>
-                <input />
-              </div>
+              <div className="form-group"><label>Pty / CK Number</label><input /></div>
+              <div className="form-group"><label>VAT Number</label><input /></div>
             </div>
-
             <div className="form-group">
               <label>Owner / Full Name and Surname</label>
               <input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
             </div>
-
             <div className="grid-two">
-              <div className="form-group">
-                <label>Email</label>
-                <input value={email} onChange={(e) => setEmail(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label>Phone Number</label>
-                <input value={phone} onChange={(e) => setPhone(e.target.value)} />
-              </div>
+              <div className="form-group"><label>Email</label><input value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+              <div className="form-group"><label>Phone Number</label><input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
             </div>
-
             <div className="grid-two">
-              <div className="form-group">
-                <label>24 Hour Number</label>
-                <input value={hotline} onChange={(e) => setHotline(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label>Password</label>
-                <input type="password" defaultValue="demo123" />
-              </div>
+              <div className="form-group"><label>24 Hour Number</label><input value={hotline} onChange={(e) => setHotline(e.target.value)} /></div>
+              <div className="form-group"><label>Password</label><input type="password" defaultValue="demo123" /></div>
             </div>
-
             <div className="form-group">
               <label>Office Address</label>
               <input value={officeAddress} onChange={(e) => setOfficeAddress(e.target.value)} />
@@ -291,14 +293,12 @@ function FirstTimeSetup({ onComplete }) {
               <div className="form-group"><label>Account Number</label><input /></div>
               <div className="form-group"><label>Branch</label><input /></div>
             </div>
-
             <div className="sub-panel">
               <h3>Bank Details: Business</h3>
               <div className="form-group"><label>Bank</label><input /></div>
               <div className="form-group"><label>Account Number</label><input /></div>
               <div className="form-group"><label>Branch</label><input /></div>
             </div>
-
             <div className="sub-panel">
               <h3>Branding</h3>
               <p>Upload your franchise logo to be used on receipts and reports.</p>
@@ -315,7 +315,7 @@ function FirstTimeSetup({ onComplete }) {
   )
 }
 
-function DashboardShell({ role, onLogout }) {
+function DashboardShell({ role, currentUser, onLogout }) {
   const [activeMain, setActiveMain] = useState('Dashboard')
   const [activeSub, setActiveSub] = useState('Employees')
   const [employeeName, setEmployeeName] = useState('')
@@ -330,10 +330,10 @@ function DashboardShell({ role, onLogout }) {
     { id: 3, fullName: 'Thandi Mokoena', email: 'thandi@martinsdirect.com', role: 'agent', phone: '082 555 0181', branch: 'Pretoria North' }
   ])
 
-  const nav = navForRole[role]
+  const nav = navForRole[role] || navForRole.user
   const roleLabel = role === 'superuser' ? 'Admin' : toTitleCase(role)
-  const accountProfile = demoAccounts[role]
-  const loggedInName = accountProfile?.displayName || roleLabel
+  const accountProfile = currentUser || demoAccounts[role] || {}
+  const loggedInName = accountProfile?.name || accountProfile?.displayName || roleLabel
 
   const filteredEmployees = employees.filter((employee) => {
     const matchesSearch = [employee.fullName, employee.email, employee.branch]
@@ -372,18 +372,9 @@ function DashboardShell({ role, onLogout }) {
     if (activeMain === 'Dashboard') {
       return (
         <div className="content-grid">
-          <div className="stat-card">
-            <span>Total Employees</span>
-            <strong>{employees.length}</strong>
-          </div>
-          <div className="stat-card">
-            <span>System Role</span>
-            <strong>{roleLabel}</strong>
-          </div>
-          <div className="stat-card">
-            <span>Admin Access</span>
-            <strong>{role === 'superuser' ? 'Enabled' : 'Limited'}</strong>
-          </div>
+          <div className="stat-card"><span>Total Employees</span><strong>{employees.length}</strong></div>
+          <div className="stat-card"><span>System Role</span><strong>{roleLabel}</strong></div>
+          <div className="stat-card"><span>Admin Access</span><strong>{role === 'superuser' ? 'Enabled' : 'Limited'}</strong></div>
           <div className="panel full-span">
             <div className="panel-header">
               <div>
@@ -393,7 +384,7 @@ function DashboardShell({ role, onLogout }) {
             </div>
             <div className="badge-row">
               <span className="pill">Role: {roleLabel}</span>
-              <span className="pill pill-soft">{employeesAccess[role]}</span>
+              <span className="pill pill-soft">{employeesAccess[role] || employeesAccess.user}</span>
             </div>
           </div>
         </div>
@@ -406,26 +397,17 @@ function DashboardShell({ role, onLogout }) {
           <div className="panel-header">
             <div>
               <h2>Employees</h2>
-              <p>{employeesAccess[role]}</p>
+              <p>{employeesAccess[role] || employeesAccess.user}</p>
             </div>
           </div>
 
           <div className="employees-grid">
             <div className="sub-panel">
               <h3>Add Employee</h3>
-              <div className="form-group">
-                <label>Full Name</label>
-                <input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} placeholder="Enter full name" />
-              </div>
-              <div className="form-group">
-                <label>Email</label>
-                <input value={employeeEmail} onChange={(e) => setEmployeeEmail(e.target.value)} placeholder="Enter email address" />
-              </div>
+              <div className="form-group"><label>Full Name</label><input value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} placeholder="Enter full name" /></div>
+              <div className="form-group"><label>Email</label><input value={employeeEmail} onChange={(e) => setEmployeeEmail(e.target.value)} placeholder="Enter email address" /></div>
               <div className="grid-two">
-                <div className="form-group">
-                  <label>Phone Number</label>
-                  <input value={employeePhone} onChange={(e) => setEmployeePhone(e.target.value)} placeholder="Enter phone number" />
-                </div>
+                <div className="form-group"><label>Phone Number</label><input value={employeePhone} onChange={(e) => setEmployeePhone(e.target.value)} placeholder="Enter phone number" /></div>
                 <div className="form-group">
                   <label>Role</label>
                   <select value={employeeRole} onChange={(e) => setEmployeeRole(e.target.value)}>
@@ -476,7 +458,6 @@ function DashboardShell({ role, onLogout }) {
               <p>Create payment receipts for employee records.</p>
             </div>
           </div>
-
           <div className="grid-two">
             <div className="form-group"><label>Employee Name</label><input placeholder="Employee name" /></div>
             <div className="form-group"><label>Amount</label><input placeholder="Amount paid" /></div>
@@ -521,21 +502,11 @@ function DashboardShell({ role, onLogout }) {
   }
 
   return (
-    <div className={`dashboard-shell ${isSidebarOpen ? 'sidebar-open' : ''}`}>
-      <button
-        type="button"
-        className={`mobile-nav-backdrop ${isSidebarOpen ? 'visible' : ''}`}
-        aria-label="Close navigation"
-        onClick={() => setIsSidebarOpen(false)}
-      />
-
-      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
+    <div className="dashboard-shell">
+      <aside className="sidebar">
         <div className="sidebar-brand">
           <Logo small />
-          <div>
-            <strong>Martinsdirect</strong>
-            <p>Operations Portal</p>
-          </div>
+          <div><strong>Martinsdirect</strong><p>Operations Portal</p></div>
         </div>
 
         <nav className="sidebar-nav">
@@ -544,7 +515,6 @@ function DashboardShell({ role, onLogout }) {
               setActiveMain(item)
               if (item === 'Franchise') setActiveSub('Employees')
               if (item === 'Payments') setActiveSub('Receipt Generation')
-              setIsSidebarOpen(false)
             }}>
               {item}
             </button>
@@ -555,10 +525,7 @@ function DashboardShell({ role, onLogout }) {
           <div className="sidebar-group">
             <p>Franchise</p>
             {nav.franchise.map((item) => (
-              <button key={item} className={`nav-sub-btn ${activeSub === item ? 'nav-sub-btn-active' : ''}`} onClick={() => {
-                setActiveSub(item)
-                setIsSidebarOpen(false)
-              }}>
+              <button key={item} className={`nav-sub-btn ${activeSub === item ? 'nav-sub-btn-active' : ''}`} onClick={() => setActiveSub(item)}>
                 {item}
               </button>
             ))}
@@ -569,10 +536,7 @@ function DashboardShell({ role, onLogout }) {
           <div className="sidebar-group">
             <p>Payments</p>
             {nav.payments.map((item) => (
-              <button key={item} className={`nav-sub-btn ${activeSub === item ? 'nav-sub-btn-active' : ''}`} onClick={() => {
-                setActiveSub(item)
-                setIsSidebarOpen(false)
-              }}>
+              <button key={item} className={`nav-sub-btn ${activeSub === item ? 'nav-sub-btn-active' : ''}`} onClick={() => setActiveSub(item)}>
                 {item}
               </button>
             ))}
@@ -593,22 +557,9 @@ function DashboardShell({ role, onLogout }) {
 
       <main className="main-content">
         <div className="topbar">
-          <div className="topbar-heading">
-            <button
-              type="button"
-              className="mobile-nav-toggle"
-              aria-label={isSidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
-              aria-expanded={isSidebarOpen}
-              onClick={() => setIsSidebarOpen((value) => !value)}
-            >
-              <span />
-              <span />
-              <span />
-            </button>
-            <div>
-              <h1>{activeMain}</h1>
-              <p>{activeSub === 'Employees' ? 'Manage your employee records and role access.' : 'Martinsdirect admin workspace.'}</p>
-            </div>
+          <div>
+            <h1>{activeMain}</h1>
+            <p>{activeSub === 'Employees' ? 'Manage your employee records and role access.' : 'Martinsdirect admin workspace.'}</p>
           </div>
 
           <div className="topbar-right">
@@ -627,21 +578,32 @@ function DashboardShell({ role, onLogout }) {
 }
 
 export default function App() {
-  const [role, setRole] = useState(null)
+  const [currentUser, setCurrentUser] = useState(() => {
+    const stored = localStorage.getItem('martinsdirect_user')
+    return stored ? JSON.parse(stored) : null
+  })
   const [needsSetup, setNeedsSetup] = useState(false)
 
-  const handleLogin = (nextRole) => {
-    setRole(nextRole)
-    setNeedsSetup(demoAccounts[nextRole]?.firstLogin || false)
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('martinsdirect_user', JSON.stringify(currentUser))
+      setNeedsSetup(demoAccounts[currentUser.role]?.firstLogin || false)
+    } else {
+      localStorage.removeItem('martinsdirect_user')
+      setNeedsSetup(false)
+    }
+  }, [currentUser])
+
+  const handleLogin = (user) => {
+    setCurrentUser(user)
   }
 
   const handleLogout = () => {
-    setRole(null)
-    setNeedsSetup(false)
+    setCurrentUser(null)
   }
 
-  if (!role) return <LoginScreen onLogin={handleLogin} />
-  if (role === 'franchisee' && needsSetup) return <FirstTimeSetup onComplete={() => setNeedsSetup(false)} />
+  if (!currentUser) return <LoginScreen onLogin={handleLogin} />
+  if (currentUser.role === 'franchisee' && needsSetup) return <FirstTimeSetup onComplete={() => setNeedsSetup(false)} />
 
-  return <DashboardShell role={role} onLogout={handleLogout} />
+  return <DashboardShell role={currentUser.role} currentUser={currentUser} onLogout={handleLogout} />
 }
