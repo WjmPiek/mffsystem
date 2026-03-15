@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './assets/styles/globals.css'
 
 const demoAccounts = {
@@ -521,8 +521,15 @@ function DashboardShell({ role, onLogout }) {
   }
 
   return (
-    <div className="dashboard-shell">
-      <aside className="sidebar">
+    <div className={`dashboard-shell ${isSidebarOpen ? 'sidebar-open' : ''}`}>
+      <button
+        type="button"
+        className={`mobile-nav-backdrop ${isSidebarOpen ? 'visible' : ''}`}
+        aria-label="Close navigation"
+        onClick={() => setIsSidebarOpen(false)}
+      />
+
+      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-brand">
           <Logo small />
           <div>
@@ -537,6 +544,7 @@ function DashboardShell({ role, onLogout }) {
               setActiveMain(item)
               if (item === 'Franchise') setActiveSub('Employees')
               if (item === 'Payments') setActiveSub('Receipt Generation')
+              setIsSidebarOpen(false)
             }}>
               {item}
             </button>
@@ -547,7 +555,10 @@ function DashboardShell({ role, onLogout }) {
           <div className="sidebar-group">
             <p>Franchise</p>
             {nav.franchise.map((item) => (
-              <button key={item} className={`nav-sub-btn ${activeSub === item ? 'nav-sub-btn-active' : ''}`} onClick={() => setActiveSub(item)}>
+              <button key={item} className={`nav-sub-btn ${activeSub === item ? 'nav-sub-btn-active' : ''}`} onClick={() => {
+                setActiveSub(item)
+                setIsSidebarOpen(false)
+              }}>
                 {item}
               </button>
             ))}
@@ -558,7 +569,10 @@ function DashboardShell({ role, onLogout }) {
           <div className="sidebar-group">
             <p>Payments</p>
             {nav.payments.map((item) => (
-              <button key={item} className={`nav-sub-btn ${activeSub === item ? 'nav-sub-btn-active' : ''}`} onClick={() => setActiveSub(item)}>
+              <button key={item} className={`nav-sub-btn ${activeSub === item ? 'nav-sub-btn-active' : ''}`} onClick={() => {
+                setActiveSub(item)
+                setIsSidebarOpen(false)
+              }}>
                 {item}
               </button>
             ))}
@@ -579,9 +593,22 @@ function DashboardShell({ role, onLogout }) {
 
       <main className="main-content">
         <div className="topbar">
-          <div>
-            <h1>{activeMain}</h1>
-            <p>{activeSub === 'Employees' ? 'Manage your employee records and role access.' : 'Martinsdirect admin workspace.'}</p>
+          <div className="topbar-heading">
+            <button
+              type="button"
+              className="mobile-nav-toggle"
+              aria-label={isSidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={isSidebarOpen}
+              onClick={() => setIsSidebarOpen((value) => !value)}
+            >
+              <span />
+              <span />
+              <span />
+            </button>
+            <div>
+              <h1>{activeMain}</h1>
+              <p>{activeSub === 'Employees' ? 'Manage your employee records and role access.' : 'Martinsdirect admin workspace.'}</p>
+            </div>
           </div>
 
           <div className="topbar-right">
